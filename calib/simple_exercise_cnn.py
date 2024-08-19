@@ -99,7 +99,7 @@ if __name__=="__main__":
         y2=test_label.to_numpy()
         sum=0
         for k in range(0,len(y2)):
-            if pred2[0][k]!=y2[k]:
+            if pred2[k]!=y2[k]:
                 sum+=1
         print(sum/len(test_y))
         
