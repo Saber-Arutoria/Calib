@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import calib
+import CGF 
 import numpy as np
 from numbers import Number
 from typing import List,Callable,Any
-import calib.init as init
+import init
 from operator import add
 from functools import reduce  
-import calib.opr.operations as opr 
+import operations as opr 
 import math
-from .CGF import Tensor
+from CGF import Tensor
+
 class Parameter(Tensor):
     "data tat can be learned"
     
@@ -83,12 +84,12 @@ class Linear(Module):
         super().__init__()
         self.input_size=input_size
         self.output_size=output_size
-        self.ifbias=bias  
-        self.weight=Parameter(init.xavier_normal(self.input_size,self.output_size, dtype="float32"))
+        self.ifbias=bias
+        self.weight=Parameter(init.xavier_uniform(self.input_size,self.output_size,dtype="float32"))
         if self.ifbias==True:
             e=math.sqrt(2)
             b=e*math.sqrt(3/self.output_size)
-            self.bias=Parameter(init.unif(1,self.output_size,left=-b,right=b, dtype="float32"))
+            self.bias=Parameter(init.unif(1,self.output_size,left=-b,right=b,dtype="float32"))
 
     def forward(self,X):
         row=X.shape[0]
@@ -103,6 +104,7 @@ class Linear(Module):
 class Flatten(Module):
     
     def forward(self,X):
+        
         return opr.reshape(X, (X.shape[0],-1))
     
 class ReLU(Module):
@@ -193,6 +195,24 @@ class BatchNorm1d(Module):
             B=opr.broadcast_to(B,x1.shape)
             return opr.add(opr.multiply(R,x1),B)
 
+class BatchNorm2d(BatchNorm1d):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        
+    def forward(self, x):
+        shape=x.shape
+        x1=opr.transpose(x,(1,2))
+        x1=opr.transpose(x1,(2,3))
+        x1=opr.reshape(x1,(shape[0]*shape[2]*shape[3],shape[1]))
+        y=opr.reshape(super().forward(x1),(shape[0],shape[2],shape[3],shape[1]))
+        
+        y=opr.transpose(y,(2,3))
+        y=opr.transpose(y,(1,2))
+        return y
+        
+
+
+
 class LayerNorm1d(Module):
     def __init__(self,features,ep=1e-5,dtype="float32"):
         super().__init__()
@@ -244,3 +264,52 @@ class Residual(Module):
     
     def forward(self,x):
         return opr.add(self.F(x),x)
+    
+    
+    
+    
+class Conv(Module):
+    def __init__(self,in_channel,out_channel,kernel_size,stride=1,bias=True,dtype="float32"):
+        super().__init__()
+        if isinstance(kernel_size, tuple):
+            kernel_size=kernel_size[0]
+        if isinstance(stride, tuple):
+            stride=stride[0]
+        self.in_channel=in_channel
+        self.out_channel=out_channel
+        self.kernel_size=kernel_size
+        self.stride=stride
+        self.ifboas=bias
+        self.weight=Parameter(init.xavier_uniform(1, 1,shape=(self.kernel_size,self.kernel_size,self.in_channel,self.out_channel),nonlinearity="relu",dtype="float32"))
+        if bias==True:
+            b=1/(self.in_channel*self.kernel_size**2)**0.5
+            self.bias=Parameter(init.unif(self.out_channel,left=-b,right=b,dtype="float32"))
+
+    def forward(self,x):
+        x=opr.transpose(x,(1,2))
+        x=opr.transpose(x,(2,3))
+        xw=opr.conv(x, self.weight,stride=self.stride,padding=self.kernel_size//2)
+        
+        
+        if self.ifboas==True:
+            a=opr.add(xw,opr.broadcast_to(self.bias,xw.shape ))
+            a=opr.transpose(a,(1,3))
+            a=opr.transpose(a,(2,3))
+            return a
+        else:
+            return xw
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

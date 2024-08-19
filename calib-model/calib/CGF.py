@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from calib import init
-from typing import Tuple,List,Optional,Callable,Any
-import calib.opr as opr
+import init
+from typing import Tuple,List,Optional
+import operations as opr
+from operator import add
+from functools import reduce    
 
 
 num_tensor=0
@@ -31,6 +33,11 @@ class Tensor_Operation(Operation):
     def __call__(self,*args):
         
         return Tensor.copy_with_operation(self,args)
+
+class TensorTuple_Operation(Operation):
+    def __call__(self, *args):
+        return TensorTuple.copy_with_operation(self,args)
+
 
 class Element:
     op:Optional[Operation]
@@ -82,6 +89,33 @@ class Element:
             item.compute_value()
             return item
     
+    
+    
+class TensorTuple(Element):
+    def __len__(self):
+       
+        return len(self.compute_value())
+    
+    def __getitem__(self,index):
+        return opr.tensor_tuple_getitem(self,index)
+    
+    def tuple(self):
+        return tuple([ele for ele in self])
+    
+    def __repr__(self):
+        return "CGF.TensorTuple"+str(self.tuple())
+    
+    def __str__(self):
+        return self.__repr__()
+   
+    def __add__(self,b):
+        assert isinstance(b, TensorTuple)
+        assert len(self)==len(b)
+        return opr.maketensortuple(*[opr.add(self[i], b[i]) for i in range(0,len(b))])
+        
+    
+    def offgraph(self):
+        return TensorTuple.copy(self.compute_value())
     
 class Tensor(Element):
     grad="Tensor"
@@ -161,7 +195,7 @@ class Tensor(Element):
         G_backward(self,out_grad)
         
         
-    def add(self,other):
+    def __add__(self,other):
         if isinstance(other, Tensor):
             return opr.Elewise_add()(self,other)
         else:
@@ -220,10 +254,15 @@ def G_backward(tail,out_grad):
     
     for t in range(0,len(reverse_list)):
         node=reverse_list[t]
-        
-        grad_node=output_start_from[node][0]
-        for k in range(1,len(output_start_from[node])):
-            grad_node=opr.add(grad_node,output_start_from[node][k])
+        if isinstance(node, TensorTuple):
+            grad_node=output_start_from[node][0]
+            for k in range(1,len(output_start_from[node])):
+                grad_node=add(grad_node,output_start_from[node][k] )
+        else:
+            
+            grad_node=output_start_from[node][0]
+            for k in range(1,len(output_start_from[node])):
+                grad_node=opr.add(grad_node,output_start_from[node][k])
         node.grad=grad_node
         
         if len(node.input_val)!=0:
@@ -241,7 +280,7 @@ def G_backward(tail,out_grad):
                         output_start_from[pred].append(dp[k])
                     else:
                         output_start_from[pred]=[dp[k]]
-    
+                   
     
     
     
